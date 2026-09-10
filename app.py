@@ -4,7 +4,7 @@ import psycopg2
 import numpy as np
 import threading
 from fastapi import FastAPI, HTTPException, Query, Body
-from fastapi.responses import FileResponse
+from fastapi.responses import HTMLResponse
 from typing import Optional, List, Dict
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.decomposition import TruncatedSVD
@@ -145,15 +145,202 @@ def startup_event():
     calibration_model.fit(xs, ys)
     conn.close()
 
-# --- HOME PAGE ENDPOINT ---
-@app.get("/")
-def read_root():
-    return FileResponse("index.html", media_type="text/html")
+# --- HOMEPAGE ---
+HTML_CONTENT = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Epidermix Phase 0 - Search</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f5f5f5;
+            padding: 40px 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            font-size: 24px;
+            margin-bottom: 8px;
+            color: #333;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        .search-box {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+        input {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        input:focus {
+            outline: none;
+            border-color: #0066cc;
+            box-shadow: 0 0 0 3px rgba(0,102,204,0.1);
+        }
+        button {
+            padding: 12px 24px;
+            background: #0066cc;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        button:hover {
+            background: #0052a3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .results {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+        .result-card {
+            background: #f9f9f9;
+            padding: 16px;
+            border-radius: 4px;
+            margin-bottom: 12px;
+        }
+        .verdict {
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 15px;
+        }
+        .verdict.grounded { color: #059669; }
+        .verdict.moderate { color: #d97706; }
+        .verdict.no-grounding { color: #dc2626; }
+        .confidence {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 12px;
+        }
+        .document {
+            font-size: 13px;
+            line-height: 1.5;
+            color: #555;
+        }
+        .document-label {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+        .error {
+            color: #dc2626;
+            padding: 12px;
+            background: #fee2e2;
+            border-radius: 4px;
+            margin-top: 12px;
+        }
+        .loading {
+            color: #0066cc;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Epidermix Phase 0 Live API</h1>
+        <p class="subtitle">Hybrid search with clinical grounding</p>
+        
+        <div class="search-box">
+            <input 
+                type="text" 
+                id="queryInput" 
+                placeholder="Enter a clinical query..."
+                value="red itchy patches on both elbows for three weeks with scaling"
+            >
+            <button id="searchBtn" onclick="performSearch()">Search</button>
+        </div>
+        
+        <div class="results" id="results" style="display: none;">
+            <div id="resultContent"></div>
+        </div>
+    </div>
 
-# --- HEALTH CHECK ENDPOINT ---
-@app.get("/health")
-def read_health():
-    return {"status": "healthy", "message": "Application is running"}
+    <script>
+        const searchBtn = document.getElementById('searchBtn');
+        const queryInput = document.getElementById('queryInput');
+        const resultsDiv = document.getElementById('results');
+        const resultContent = document.getElementById('resultContent');
+
+        queryInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') performSearch();
+        });
+
+        async function performSearch() {
+            const query = queryInput.value.trim();
+            if (!query) return;
+
+            searchBtn.disabled = true;
+            resultContent.innerHTML = '<p class="loading">Searching...</p>';
+            resultsDiv.style.display = 'block';
+
+            try {
+                const response = await fetch(`/search?q=${encodeURIComponent(query)}`);
+                const data = await response.json();
+
+                if (!response.ok) {
+                    resultContent.innerHTML = `<div class="error">${data.detail || 'Search failed'}</div>`;
+                    return;
+                }
+
+                let verdictClass = 'no-grounding';
+                if (data.verdict.includes('GROUNDED')) verdictClass = 'grounded';
+                else if (data.verdict.includes('MODERATE')) verdictClass = 'moderate';
+
+                resultContent.innerHTML = `
+                    <div class="result-card">
+                        <div class="verdict ${verdictClass}">${data.verdict}</div>
+                        <div class="confidence">Calibrated Confidence: ${data.calibrated_confidence}</div>
+                        ${data.matched_document ? `
+                            <div class="document">
+                                <div class="document-label">Matched Document (ID: ${data.matched_document.id})</div>
+                                <strong>${data.matched_document.source}</strong> [${data.matched_document.license}]<br>
+                                ${data.matched_document.preview}
+                            </div>
+                        ` : ''}
+                        ${data.reason ? `<div style="margin-top: 12px; font-size: 13px; color: #666;">${data.reason}</div>` : ''}
+                    </div>
+                `;
+            } catch (error) {
+                resultContent.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            } finally {
+                searchBtn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
+"""
+
+@app.get("/", response_class=HTMLResponse)
+def read_root():
+    return HTML_CONTENT
 
 # --- MODULE 4 API ENDPOINT ---
 @app.get("/search")

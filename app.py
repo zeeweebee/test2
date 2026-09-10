@@ -12,7 +12,7 @@ from sklearn.isotonic import IsotonicRegression
 from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title="Epidermix Phase 0 Live API")
-app.mount("/", StaticFiles(directory=".", name="static"), name="static")
+app.mount("/", StaticFiles(directory="."), name="static")
 
 # Fallback DSN for local development, overwritten by cloud providers via env strings
 DATABASE_URL = os.getenv("DATABASE_URL", "host=localhost dbname=epidermix_demo user=epidermix password=epidermix")

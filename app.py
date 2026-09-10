@@ -9,10 +9,8 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.decomposition import TruncatedSVD
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.isotonic import IsotonicRegression
-from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title="Epidermix Phase 0 Live API")
-app.mount("/", StaticFiles(directory="."), name="static")
 
 # Fallback DSN for local development, overwritten by cloud providers via env strings
 DATABASE_URL = os.getenv("DATABASE_URL", "host=localhost dbname=epidermix_demo user=epidermix password=epidermix")
@@ -147,8 +145,8 @@ def startup_event():
     conn.close()
 
 # --- HEALTH CHECK ENDPOINT ---
-@app.get("/")
-def read_root():
+@app.get("/health")
+def read_health():
     return {"status": "healthy", "message": "Application is running"}
 
 # --- MODULE 4 API ENDPOINT ---

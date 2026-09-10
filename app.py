@@ -4,6 +4,7 @@ import psycopg2
 import numpy as np
 import threading
 from fastapi import FastAPI, HTTPException, Query, Body
+from fastapi.responses import FileResponse
 from typing import Optional, List, Dict
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.decomposition import TruncatedSVD
@@ -143,6 +144,11 @@ def startup_event():
     calibration_model = IsotonicRegression(out_of_bounds="clip", y_min=0.02, y_max=0.98)
     calibration_model.fit(xs, ys)
     conn.close()
+
+# --- HOME PAGE ENDPOINT ---
+@app.get("/")
+def read_root():
+    return FileResponse("index.html", media_type="text/html")
 
 # --- HEALTH CHECK ENDPOINT ---
 @app.get("/health")

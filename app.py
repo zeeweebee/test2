@@ -144,6 +144,11 @@ def startup_event():
     calibration_model.fit(xs, ys)
     conn.close()
 
+# --- HEALTH CHECK ENDPOINT ---
+@app.get("/")
+def read_root():
+    return {"status": "healthy", "message": "Application is running"}
+
 # --- MODULE 4 API ENDPOINT ---
 @app.get("/search")
 def hybrid_search(q: str = Query(..., description="The query string to evaluate")):
